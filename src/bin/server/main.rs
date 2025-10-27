@@ -43,6 +43,7 @@ struct ServerState {
     unicast: IpAddr,
     interface: NetworkInterface,
     interface_id: InterfaceIndexOrAddress,
+    metadata_socket: SetOnce<SocketAddr>,
     request_socket: SetOnce<SocketAddr>,
     image: ImageMetadata,
     args: ServerArgs,
@@ -113,6 +114,7 @@ fn args_to_state(args: ServerArgs) -> Result<ServerState> {
         unicast,
         interface_id,
         interface,
+        metadata_socket: SetOnce::new(),
         request_socket: SetOnce::new(),
         image: image::compute_image_metadata(&args.file, args.chunk_size)?,
         args,
@@ -127,8 +129,9 @@ async fn main() -> Result<()> {
     let state = Arc::new(args_to_state(args)?);
 
     let discovery_task = tasks::spawn(tasks::server_discovery(state.clone()));
+    let metadata_task = tasks::spawn(tasks::metadata_server(state.clone()));
 
-    try_join!(discovery_task)?;
+    try_join!(discovery_task, metadata_task)?;
 
     Ok(())
 }

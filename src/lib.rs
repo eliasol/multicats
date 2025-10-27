@@ -18,6 +18,7 @@ pub struct ImageMetadata {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ServerDiscovery {
+    pub metadata_socket: SocketAddr,
     pub request_socket: SocketAddr,
     pub transfer_socket: SocketAddr,
 }
