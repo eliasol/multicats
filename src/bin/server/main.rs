@@ -1,3 +1,4 @@
+mod image;
 mod tasks;
 
 use std::{
@@ -10,7 +11,10 @@ use std::{
 use anyhow::{Error, Result};
 use clap::Parser;
 use env_logger::Env;
-use multicats::net::{NetworkInterface, get_interface};
+use multicats::{
+    ImageMetadata,
+    net::{NetworkInterface, get_interface},
+};
 use socket2::InterfaceIndexOrAddress;
 use tokio::{sync::SetOnce, try_join};
 use tokio_util::sync::CancellationToken;
@@ -30,6 +34,8 @@ struct ServerArgs {
     max_hops: u32,
     #[clap(long, default_value_t = 1000)]
     discovery_interval: u64,
+    #[clap(long, default_value_t = 5 * 1024 * 1024)]
+    chunk_size: usize,
 }
 
 struct ServerState {
@@ -38,6 +44,7 @@ struct ServerState {
     interface: NetworkInterface,
     interface_id: InterfaceIndexOrAddress,
     request_socket: SetOnce<SocketAddr>,
+    image: ImageMetadata,
     args: ServerArgs,
 }
 
@@ -107,6 +114,7 @@ fn args_to_state(args: ServerArgs) -> Result<ServerState> {
         interface_id,
         interface,
         request_socket: SetOnce::new(),
+        image: image::compute_image_metadata(&args.file, args.chunk_size)?,
         args,
     })
 }
