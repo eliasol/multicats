@@ -39,19 +39,17 @@ pub async fn server_discovery(state: Arc<ServerState>) -> Result<()> {
 
     let token = state.token.clone();
 
-    let data = postcard::to_allocvec(
-        &select! {
-            biased;
-            _ = token.cancelled() => { return Ok(()); },
-            x = async {
-                ServerDiscovery {
-                    metadata_socket: *state.metadata_socket.wait().await,
-                    request_socket: *state.request_socket.wait().await,
-                    transfer_socket: state.args.transfer_socket,
-                }
-            } => x,
-        }
-    )?;
+    let data = postcard::to_allocvec(&select! {
+        biased;
+        _ = token.cancelled() => { return Ok(()); },
+        x = async {
+            ServerDiscovery {
+                metadata_socket: *state.metadata_socket.wait().await,
+                request_socket: *state.request_socket.wait().await,
+                transfer_socket: state.args.transfer_socket,
+            }
+        } => x,
+    })?;
 
     info!(
         "Start sending discovery packets every {} milliseconds on interface {} from address {}",
@@ -72,7 +70,16 @@ pub async fn server_discovery(state: Arc<ServerState>) -> Result<()> {
 pub async fn metadata_server(state: Arc<ServerState>) -> Result<()> {
     let bind_address = match state.unicast {
         IpAddr::V4(ip) => SocketAddr::V4(SocketAddrV4::new(ip, 0)),
-        IpAddr::V6(ip) => SocketAddr::V6(SocketAddrV6::new(ip, 0, 0, 0)),
+        IpAddr::V6(ip) => SocketAddr::V6(SocketAddrV6::new(
+            ip,
+            0,
+            0,
+            if ip.is_unicast_link_local() {
+                state.interface.index
+            } else {
+                0
+            },
+        )),
     };
     let socket = TcpListener::bind(bind_address).await?;
     state

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::{Error, Result};
 use log::info;
@@ -34,7 +34,7 @@ pub async fn server_discovery(state: Arc<ClientState>) -> Result<()> {
             size = socket.recv(&mut buf) => size?,
         };
 
-        if let Ok(server) = postcard::from_bytes::<ServerDiscovery>(&buf[0..size])
+        if let Ok(mut server) = postcard::from_bytes::<ServerDiscovery>(&buf[0..size])
             && server.metadata_socket.is_ipv6() == state.unicast.is_ipv6()
             && server.request_socket.is_ipv6() == state.unicast.is_ipv6()
             && server.transfer_socket.is_ipv6() == state.unicast.is_ipv6()
@@ -43,6 +43,15 @@ pub async fn server_discovery(state: Arc<ClientState>) -> Result<()> {
                 "Discovered server for transfer on socket {}",
                 server.transfer_socket
             );
+
+            for socket in [&mut server.metadata_socket, &mut server.transfer_socket] {
+                if let SocketAddr::V6(socket) = socket
+                    && socket.ip().is_unicast_link_local()
+                {
+                    socket.set_scope_id(state.interface.index);
+                }
+            }
+
             state
                 .server
                 .set(server)
