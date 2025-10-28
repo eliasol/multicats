@@ -1,3 +1,5 @@
+mod tasks;
+
 use std::{
     net::{IpAddr, SocketAddr},
     path::PathBuf,
@@ -8,12 +10,12 @@ use std::{
 use anyhow::{Error, Result};
 use clap::Parser;
 use env_logger::Env;
-use log::info;
 use multicats::{
-    ServerDiscovery,
-    net::{NetworkInterface, get_interface, new_receiver_multicast_socket},
+    ImageMetadata, ServerDiscovery,
+    net::{NetworkInterface, get_interface},
 };
 use socket2::InterfaceIndexOrAddress;
+use tokio::{sync::SetOnce, try_join};
 use tokio_util::sync::CancellationToken;
 
 #[derive(Parser)]
@@ -37,30 +39,11 @@ struct ClientState {
     interface_id: InterfaceIndexOrAddress,
     unicast: IpAddr,
     args: ClientArgs,
-    server: ServerDiscovery,
+    server: SetOnce<ServerDiscovery>,
+    image: SetOnce<ImageMetadata>,
 }
 
-pub async fn server_discovery(
-    discovery_socket: SocketAddr,
-    interface: InterfaceIndexOrAddress,
-) -> Result<ServerDiscovery> {
-    let socket = new_receiver_multicast_socket(discovery_socket, interface).await?;
-
-    let mut buf = [0u8; size_of::<ServerDiscovery>()];
-
-    loop {
-        let size = socket.recv(&mut buf).await?;
-        if let Ok(server) = postcard::from_bytes::<ServerDiscovery>(&buf[0..size]) {
-            info!(
-                "Discovered server at {} on socket {}",
-                server.request_socket, server.transfer_socket
-            );
-            return Ok(server);
-        }
-    }
-}
-
-async fn args_to_state(args: ClientArgs) -> Result<ClientState> {
+fn args_to_state(args: ClientArgs) -> Result<ClientState> {
     if !args.discovery_socket.ip().is_multicast() {
         return Err(Error::msg("Discovery address must be a multicast group."));
     }
@@ -112,15 +95,14 @@ async fn args_to_state(args: ClientArgs) -> Result<ClientState> {
         }
     };
 
-    let server = server_discovery(args.discovery_socket, interface_id).await?;
-
     Ok(ClientState {
         token: CancellationToken::new(),
         unicast,
         interface_id,
         interface,
         args,
-        server,
+        server: SetOnce::new(),
+        image: SetOnce::new(),
     })
 }
 
@@ -130,7 +112,12 @@ async fn main() -> Result<()> {
 
     let args = ClientArgs::parse();
 
-    let state = Arc::new(args_to_state(args).await?);
+    let state = Arc::new(args_to_state(args)?);
+
+    let server_discovery = tasks::spawn(tasks::server_discovery(state.clone()));
+    let metadata_transfer = tasks::spawn(tasks::metadata_transfer(state.clone()));
+
+    try_join!(server_discovery, metadata_transfer)?;
 
     Ok(())
 }
