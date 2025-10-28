@@ -53,22 +53,19 @@ pub async fn server_discovery(state: Arc<ClientState>) -> Result<()> {
 }
 
 pub async fn metadata_transfer(state: Arc<ClientState>) -> Result<()> {
-    let cancelled_error: Result<()> = Err(Error::msg("Metadata transfer cancelled"));
     let token = state.token.clone();
 
     let server = select! {
+        biased;
+        _ = token.cancelled() => { return Ok(()); },
         x = state.server.wait() => x,
-        _ = token.cancelled() => { return cancelled_error; },
     };
 
     info!(
         "Connecting to image metadata server at {}",
         server.metadata_socket
     );
-    let mut socket = select! {
-        x = TcpStream::connect(server.metadata_socket) => x?,
-        _ = token.cancelled() => { return cancelled_error; },
-    };
+    let mut socket = TcpStream::connect(server.metadata_socket).await?;
 
     info!("Retrieving image metadata from server");
 
@@ -76,8 +73,9 @@ pub async fn metadata_transfer(state: Arc<ClientState>) -> Result<()> {
         let mut buf = Vec::<u8>::new();
 
         select! {
+            biased;
+            _ = token.cancelled() => { return Ok(()); },
             x = socket.read_to_end(&mut buf) => x?,
-            _ = token.cancelled() => { return cancelled_error; },
         };
 
         if let Ok(metadata) = postcard::from_bytes::<ImageMetadata>(&buf) {

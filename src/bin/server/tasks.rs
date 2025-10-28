@@ -39,11 +39,19 @@ pub async fn server_discovery(state: Arc<ServerState>) -> Result<()> {
 
     let token = state.token.clone();
 
-    let data = postcard::to_allocvec(&ServerDiscovery {
-        metadata_socket: *state.metadata_socket.wait().await,
-        request_socket: *state.request_socket.wait().await,
-        transfer_socket: state.args.transfer_socket,
-    })?;
+    let data = postcard::to_allocvec(
+        &select! {
+            biased;
+            _ = token.cancelled() => { return Ok(()); },
+            x = async {
+                ServerDiscovery {
+                    metadata_socket: *state.metadata_socket.wait().await,
+                    request_socket: *state.request_socket.wait().await,
+                    transfer_socket: state.args.transfer_socket,
+                }
+            } => x,
+        }
+    )?;
 
     info!(
         "Start sending discovery packets every {} milliseconds on interface {} from address {}",
