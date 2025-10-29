@@ -144,7 +144,6 @@ async fn chunk_receiver(state: &Arc<ClientState>, to_disk: Sender<(u64, Vec<u8>)
     })
     .await?;
 
-    println!("{:?}", server.request_socket);
     req_socket.connect(server.request_socket).await?;
 
     let mut assemblers = BTreeMap::<usize, ChunkAssembler>::new();
@@ -257,7 +256,7 @@ async fn disk_writer(
                 info!(
                     "Receiving image... {} bytes left ({} Mb/s)",
                     image_size - count,
-                    (count - last_count) as f32 / (1024f32 * 1024f32) / (now - time).as_secs_f32()
+                    (count - last_count) as f32 / (1024f32 * 128f32) / (now - time).as_secs_f32()
                 );
                 time = now;
                 last_count = count;
