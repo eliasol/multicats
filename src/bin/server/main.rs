@@ -36,6 +36,10 @@ struct ServerArgs {
     discovery_interval: u64,
     #[clap(long, default_value_t = 5 * 1024 * 1024)]
     chunk_size: usize,
+    #[clap(long, default_value_t = 1500 - 40 - 8)]
+    max_udp_payload_size: u16,
+    #[clap(long, default_value_t = 1024 * 1024 * 1024)]
+    flood_speed: u32,
 }
 
 struct ServerState {
@@ -130,8 +134,9 @@ async fn main() -> Result<()> {
 
     let discovery_task = tasks::spawn(tasks::server_discovery(state.clone()));
     let metadata_task = tasks::spawn(tasks::metadata_server(state.clone()));
+    let transfer_task = tasks::spawn(tasks::chunk_request_server(state.clone()));
 
-    try_join!(discovery_task, metadata_task)?;
+    try_join!(discovery_task, metadata_task, transfer_task)?;
 
     Ok(())
 }

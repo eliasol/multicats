@@ -1,3 +1,5 @@
+mod chunk;
+
 use std::{
     net::{IpAddr, SocketAddr, SocketAddrV4, SocketAddrV6},
     sync::Arc,
@@ -10,6 +12,8 @@ use multicats::{ServerDiscovery, net::new_sender_multicast_socket};
 use tokio::{io::AsyncWriteExt, net::TcpListener, select, task::JoinSet, time::sleep};
 
 use crate::ServerState;
+
+pub use chunk::chunk_request_server;
 
 pub async fn spawn(handle: impl Future<Output = Result<()>> + Send + 'static) -> Result<()> {
     tokio::spawn(handle).await?

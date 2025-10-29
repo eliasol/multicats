@@ -1,3 +1,4 @@
+mod chunk;
 mod tasks;
 
 use std::{
@@ -116,8 +117,9 @@ async fn main() -> Result<()> {
 
     let server_discovery = tasks::spawn(tasks::server_discovery(state.clone()));
     let metadata_transfer = tasks::spawn(tasks::metadata_transfer(state.clone()));
+    let chunk_transfer = tasks::spawn(tasks::chunk_transfer(state.clone()));
 
-    try_join!(server_discovery, metadata_transfer)?;
+    try_join!(server_discovery, metadata_transfer, chunk_transfer)?;
 
     Ok(())
 }
