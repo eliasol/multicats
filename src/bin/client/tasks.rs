@@ -1,7 +1,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     io::SeekFrom,
-    net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
+    net::{IpAddr, SocketAddr, SocketAddrV4, SocketAddrV6},
     sync::Arc,
     time::Duration,
 };
@@ -129,18 +129,18 @@ async fn chunk_receiver(state: &Arc<ClientState>, to_disk: Sender<(u64, Vec<u8>)
     let server = state.server.wait().await;
     let socket = new_receiver_multicast_socket(server.transfer_socket, state.interface_id).await?;
 
-    let req_socket = UdpSocket::bind(match server.request_socket {
-        SocketAddr::V6(x) => SocketAddr::V6(SocketAddrV6::new(
-            Ipv6Addr::UNSPECIFIED,
+    let req_socket = UdpSocket::bind(match state.unicast {
+        IpAddr::V6(ip) => SocketAddr::V6(SocketAddrV6::new(
+            ip,
             0,
             0,
-            if x.ip().is_unicast_link_local() {
+            if ip.is_unicast_link_local() {
                 state.interface.index
             } else {
                 0
             },
         )),
-        SocketAddr::V4(_) => SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0)),
+        IpAddr::V4(ip) => SocketAddr::V4(SocketAddrV4::new(ip, 0)),
     })
     .await?;
 
