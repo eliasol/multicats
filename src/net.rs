@@ -55,9 +55,9 @@ pub fn get_interfaces() -> Result<Vec<NetworkInterface>> {
     Ok(out)
 }
 
-pub fn get_interface(name: Option<&str>) -> Result<Option<NetworkInterface>> {
+pub fn get_interface(id: Option<&str>) -> Result<Option<NetworkInterface>> {
     let ifaces = get_interfaces()?;
-    Ok(match name {
+    Ok(match id {
         None => ifaces
             .iter()
             .find(|int| {
@@ -66,7 +66,10 @@ pub fn get_interface(name: Option<&str>) -> Result<Option<NetworkInterface>> {
                     && int.flags.contains(InterfaceFlags::MULTICAST)
             })
             .cloned(),
-        Some(name) => ifaces.iter().find(|&int| int.name == name).cloned(),
+        Some(id) => match id.parse::<u32>() {
+            Ok(index) => ifaces.iter().find(|&int| int.index == index).cloned(),
+            _ => ifaces.iter().find(|&int| int.name == id).cloned(),
+        },
     })
 }
 
