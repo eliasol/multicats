@@ -174,6 +174,10 @@ async fn chunk_receiver(state: &Arc<ClientState>, to_disk: Sender<(u64, Vec<u8>)
             _ => continue,
         };
 
+        if !missing.contains(&fragment.chunk) {
+            continue;
+        }
+
         let chunk = &state.image.get().unwrap().chunks[fragment.chunk];
 
         if !assemblers.contains_key(&fragment.chunk) {
