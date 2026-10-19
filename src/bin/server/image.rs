@@ -42,14 +42,23 @@ pub fn compute_image_metadata(file: impl AsRef<Path>, chunk_size: usize) -> Resu
             last_report = now;
             last_pos = pos;
         }
-        let size = file.read(buf)?;
-        let hash = XxHash3_64::oneshot(&buf[0..size]);
+        let target_size = (file_size - pos).min(chunk_size as u64) as usize;
+        let mut count: usize = 0;
+        while count < target_size {
+            let n = file.read(&mut buf[count..target_size])?;
+            if n == 0 {
+                break;
+            }
+            count += n;
+        }
+
+        let hash = XxHash3_64::oneshot(&buf[0..count]);
         chunk_list.push(ChunkMetadata {
             offset: pos,
-            size,
+            size: count,
             hash,
         });
-        pos += size as u64;
+        pos += count as u64;
     }
 
     let end_time = Instant::now();
