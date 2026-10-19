@@ -1,4 +1,5 @@
 pub mod net;
+pub mod sparse;
 
 use std::net::SocketAddr;
 
@@ -30,6 +31,7 @@ pub struct ChunkMetadata {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ImageMetadata {
+    pub file_size: u64,
     pub chunks: Box<[ChunkMetadata]>,
 }
 

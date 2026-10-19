@@ -109,10 +109,11 @@ pub async fn metadata_transfer(state: Arc<ClientState>) -> Result<()> {
     };
 
     let metadata = postcard::from_bytes::<ImageMetadata>(&buf)?;
-    let image_size: u64 = metadata.chunks.iter().map(|chunk| chunk.size as u64).sum();
+    let allocated_size: u64 = metadata.chunks.iter().map(|chunk| chunk.size as u64).sum();
     info!(
-        "Received metadata for an image of size {} bytes subdivided into {} chunks",
-        image_size,
+        "Received metadata for image size {} bytes ({} bytes allocated across {} chunks)",
+        metadata.file_size,
+        allocated_size,
         metadata.chunks.len()
     );
     state
@@ -224,18 +225,14 @@ async fn disk_writer(
         .truncate(false)
         .open(&state.args.file)
         .await?;
-    let Some(image_size) = state
-        .image
-        .wait()
-        .await
-        .chunks
-        .iter()
-        .map(|chunk| chunk.offset + chunk.size as u64)
-        .max()
-    else {
-        return Ok(());
-    };
 
+    multicats::sparse::set_sparse_file(&file)?;
+
+    let metadata = state.image.wait().await;
+    let image_size = metadata.file_size;
+    let total_data_bytes: u64 = metadata.chunks.iter().map(|chunk| chunk.size as u64).sum();
+
+    let _ = file.set_len(0).await;
     file.set_len(image_size).await.unwrap_or_else(|e| {
         warn!("Unable to resize file ({})", e);
     });
@@ -256,7 +253,7 @@ async fn disk_writer(
                 let now = Instant::now();
                 info!(
                     "Receiving image... {} bytes left ({:.2} MB/s)",
-                    image_size.saturating_sub(count),
+                    total_data_bytes.saturating_sub(count),
                     (count - last_count) as f32 / (1024f32 * 1024f32) / (now - time).as_secs_f32()
                 );
                 time = now;

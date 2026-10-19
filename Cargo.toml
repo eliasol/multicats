@@ -17,3 +17,13 @@ socket2 = "0.6.1"
 tokio = { version = "1.47.1", features = ["fs", "io-util", "macros", "net", "rt", "rt-multi-thread", "signal", "time"] }
 tokio-util = "0.7.16"
 twox-hash = { version = "2.1.2", default-features = false, features = ["xxhash3_64"] }
+
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1.1", features = ["fs"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_Ioctl",
+    "Win32_System_IO",
+] }
