@@ -38,7 +38,7 @@ pub async fn server_discovery(state: Arc<ClientState>) -> Result<()> {
         new_receiver_multicast_socket(state.args.discovery_socket, state.interface_id).await?;
 
     let token = state.token.clone();
-    let mut buf = [0u8; size_of::<ServerDiscovery>()];
+    let mut buf = [0u8; 512];
 
     info!(
         "Listening for server discovery on interface {} on group {}",
@@ -281,7 +281,7 @@ async fn disk_writer(
 }
 
 pub async fn chunk_transfer(state: Arc<ClientState>) -> Result<()> {
-    let (sx, rx) = channel(128);
+    let (sx, rx) = channel(16);
 
     try_join!(chunk_receiver(&state, sx), disk_writer(&state, rx),)?;
 
