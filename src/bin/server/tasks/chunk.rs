@@ -1,6 +1,6 @@
 use std::{
     collections::BTreeSet,
-    io::SeekFrom,
+    fs::File,
     net::{IpAddr, SocketAddr, SocketAddrV4, SocketAddrV6},
     ops::Bound,
     sync::Arc,
@@ -9,10 +9,9 @@ use std::{
 
 use anyhow::{Result, ensure};
 use log::{info, warn};
+use memmap2::Mmap;
 use multicats::{ChunkData, ChunkRequest, net::new_sender_multicast_socket};
 use tokio::{
-    fs::File,
-    io::{AsyncReadExt, AsyncSeekExt},
     net::UdpSocket,
     select,
     sync::mpsc::{Receiver, Sender, channel},
@@ -97,7 +96,12 @@ async fn chunk_dispatcher(
         l as usize
     };
 
-    let mut file = File::open(&state.args.file).await?;
+    let std_file = File::open(&state.args.file)?;
+    let mmap = if std_file.metadata()?.len() > 0 {
+        Some(unsafe { Mmap::map(&std_file)? })
+    } else {
+        None
+    };
 
     let socket = new_sender_multicast_socket(
         state.args.transfer_socket,
@@ -116,7 +120,6 @@ async fn chunk_dispatcher(
 
     let mut send_buf: Box<[u8]> =
         vec![0u8; state.args.max_udp_payload_size as usize].into_boxed_slice();
-    let mut chunk_buf: Box<[u8]> = vec![0u8; state.args.chunk_size].into_boxed_slice();
 
     loop {
         while let Ok(x) = receiver.try_recv() {
@@ -146,18 +149,18 @@ async fn chunk_dispatcher(
         last_id = next;
 
         let chunk = &state.image.chunks[next];
-        file.seek(SeekFrom::Start(chunk.offset)).await?;
-
-        let mut count: usize = 0;
-
-        while count < chunk.size {
-            let bytes_read = file.read(&mut chunk_buf[count..chunk.size]).await?;
-            ensure!(
-                bytes_read != 0,
-                "Invalid global state (chunk extends beyond file boundaries)"
-            );
-            count += bytes_read;
-        }
+        let chunk_bytes = match &mmap {
+            Some(m) => {
+                let start = chunk.offset as usize;
+                let end = start + chunk.size;
+                ensure!(
+                    end <= m.len(),
+                    "Invalid global state (chunk extends beyond file boundaries)"
+                );
+                &m[start..end]
+            }
+            None => &[],
+        };
 
         let mut count: usize = 0;
         while count < chunk.size {
@@ -168,7 +171,7 @@ async fn chunk_dispatcher(
             let data = ChunkData {
                 chunk: next,
                 offset: count,
-                data: &chunk_buf[count..count + frag_size],
+                data: &chunk_bytes[count..count + frag_size],
             };
             let send = postcard::to_slice(&data, &mut send_buf)?;
 
