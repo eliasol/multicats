@@ -115,6 +115,14 @@ async fn main() -> Result<()> {
 
     let state = Arc::new(args_to_state(args)?);
 
+    let cancel_token = state.token.clone();
+    tokio::spawn(async move {
+        if tokio::signal::ctrl_c().await.is_ok() {
+            log::info!("Received shutdown signal, stopping client...");
+            cancel_token.cancel();
+        }
+    });
+
     let server_discovery = tasks::spawn(tasks::server_discovery(state.clone()));
     let metadata_transfer = tasks::spawn(tasks::metadata_transfer(state.clone()));
     let chunk_transfer = tasks::spawn(tasks::chunk_transfer(state.clone()));

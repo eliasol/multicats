@@ -161,6 +161,9 @@ async fn chunk_dispatcher(
 
         let mut count: usize = 0;
         while count < chunk.size {
+            if state.token.is_cancelled() {
+                break;
+            }
             let frag_size = (chunk.size - count).min(max_fragment_size);
             let data = ChunkData {
                 chunk: next,

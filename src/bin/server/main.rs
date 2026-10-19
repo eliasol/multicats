@@ -132,6 +132,14 @@ async fn main() -> Result<()> {
     let args = ServerArgs::parse();
     let state = Arc::new(args_to_state(args)?);
 
+    let cancel_token = state.token.clone();
+    tokio::spawn(async move {
+        if tokio::signal::ctrl_c().await.is_ok() {
+            log::info!("Received shutdown signal, stopping server...");
+            cancel_token.cancel();
+        }
+    });
+
     let discovery_task = tasks::spawn(tasks::server_discovery(state.clone()));
     let metadata_task = tasks::spawn(tasks::metadata_server(state.clone()));
     let transfer_task = tasks::spawn(tasks::chunk_request_server(state.clone()));
