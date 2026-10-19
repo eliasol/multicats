@@ -84,6 +84,7 @@ pub async fn new_sender_multicast_socket(
     socket.connect(group).await?;
 
     let sockref = SockRef::from(&socket);
+    let _ = sockref.set_send_buffer_size(4 * 1024 * 1024);
 
     match interface {
         InterfaceIndexOrAddress::Address(_) => {
@@ -138,6 +139,9 @@ pub async fn new_receiver_multicast_socket(
     let sockaddr = group;
 
     let socket = UdpSocket::bind(sockaddr).await?;
+
+    let sockref = SockRef::from(&socket);
+    let _ = sockref.set_recv_buffer_size(4 * 1024 * 1024);
 
     match group.ip() {
         IpAddr::V4(ipv4) => match interface {
