@@ -255,9 +255,9 @@ async fn disk_writer(
             _ = sleep_until(time + Duration::from_secs(1)) => {
                 let now = Instant::now();
                 info!(
-                    "Receiving image... {} bytes left ({} Mb/s)",
-                    image_size - count,
-                    (count - last_count) as f32 / (1024f32 * 128f32) / (now - time).as_secs_f32()
+                    "Receiving image... {} bytes left ({:.2} MB/s)",
+                    image_size.saturating_sub(count),
+                    (count - last_count) as f32 / (1024f32 * 1024f32) / (now - time).as_secs_f32()
                 );
                 time = now;
                 last_count = count;
