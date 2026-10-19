@@ -100,29 +100,26 @@ pub async fn metadata_transfer(state: Arc<ClientState>) -> Result<()> {
 
     info!("Retrieving image metadata from server");
 
-    loop {
-        let mut buf = Vec::<u8>::new();
+    let mut buf = Vec::<u8>::new();
 
-        select! {
-            biased;
-            _ = token.cancelled() => { return Ok(()); },
-            x = socket.read_to_end(&mut buf) => x?,
-        };
+    select! {
+        biased;
+        _ = token.cancelled() => { return Ok(()); },
+        x = socket.read_to_end(&mut buf) => x?,
+    };
 
-        if let Ok(metadata) = postcard::from_bytes::<ImageMetadata>(&buf) {
-            let image_size: u64 = metadata.chunks.iter().map(|chunk| chunk.size as u64).sum();
-            info!(
-                "Received metadata for an image of size {} bytes subdivided into {} chunks",
-                image_size,
-                metadata.chunks.len()
-            );
-            state
-                .image
-                .set(metadata)
-                .expect("Invalid global state (image was already retrieved)");
-            return Ok(());
-        }
-    }
+    let metadata = postcard::from_bytes::<ImageMetadata>(&buf)?;
+    let image_size: u64 = metadata.chunks.iter().map(|chunk| chunk.size as u64).sum();
+    info!(
+        "Received metadata for an image of size {} bytes subdivided into {} chunks",
+        image_size,
+        metadata.chunks.len()
+    );
+    state
+        .image
+        .set(metadata)
+        .expect("Invalid global state (image was already retrieved)");
+    Ok(())
 }
 
 async fn chunk_receiver(state: &Arc<ClientState>, to_disk: Sender<(u64, Vec<u8>)>) -> Result<()> {
