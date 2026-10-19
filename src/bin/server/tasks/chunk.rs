@@ -109,7 +109,10 @@ async fn chunk_dispatcher(
 
     let mut queue: BTreeSet<usize> = BTreeSet::new();
     let mut last_id: usize = 0;
-    let mut sleep = Instant::now();
+    let mut target_time = Instant::now();
+
+    const MIN_SLEEP: Duration = Duration::from_millis(1);
+    const MAX_LAG: Duration = Duration::from_millis(2);
 
     let mut send_buf: Box<[u8]> =
         vec![0u8; state.args.max_udp_payload_size as usize].into_boxed_slice();
@@ -135,7 +138,7 @@ async fn chunk_dispatcher(
                 select! {
                     biased;
                     _ = state.token.cancelled() => break,
-                    x = receiver.recv() => if let Some(x) = x { sleep = Instant::now(); x } else { break },
+                    x = receiver.recv() => if let Some(x) = x { target_time = Instant::now(); x } else { break },
                 }
             }
         };
@@ -166,10 +169,24 @@ async fn chunk_dispatcher(
             };
             let send = postcard::to_slice(&data, &mut send_buf)?;
 
-            sleep_until(sleep).await;
+            if state.args.flood_speed > 0 {
+                let now = Instant::now();
+                if target_time + MAX_LAG < now {
+                    target_time = now;
+                } else if target_time > now && target_time - now >= MIN_SLEEP {
+                    sleep_until(target_time).await;
+                }
+            }
+
             let sent = socket.send(send).await?;
             ensure!(sent == send.len(), "Failed to send chunk fragment");
-            sleep += 8 * sent as u32 * Duration::from_secs(1) / state.args.flood_speed;
+
+            if state.args.flood_speed > 0 {
+                let packet_nanos =
+                    (sent as u64 * 8 * 1_000_000_000) / (state.args.flood_speed as u64);
+                target_time += Duration::from_nanos(packet_nanos);
+            }
+
             count += frag_size;
         }
     }
